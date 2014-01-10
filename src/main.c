@@ -7,12 +7,7 @@ enum {
 
 // receive keys
 enum {
-  TTVNEWS_TITLE = 0x0
-};
-
-// method types
-enum {
-  TTVNEWS_METHOD_READ = 0x0
+  TTVNEWS_TITLE = 0x1
 };
 
 static char title[128];
@@ -20,9 +15,13 @@ static char title[128];
 Window *my_window;
 TextLayer *text_layer;
 
-static void fetch_msg(void) {
-  Tuplet symbol_tuple = TupletInteger(TTVNEWS_METHOD, TTVNEWS_METHOD_READ);
+bool refetch_story = false;
 
+static void fetch_story(void) {
+  refetch_story = false;
+
+  Tuplet method_tuple = TupletCString(TTVNEWS_METHOD, "story");
+	
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
 
@@ -30,24 +29,42 @@ static void fetch_msg(void) {
     return;
   }
 
-  dict_write_tuplet(iter, &symbol_tuple);
+  dict_write_tuplet(iter, &method_tuple);
   dict_write_end(iter);
 
   app_message_outbox_send();
 }
 
 static void in_received_handler(DictionaryIterator *iter, void *context) {
-  Tuple *title_tuple = dict_find(iter, TTVNEWS_TITLE);
+  Tuple *method_tuple = dict_find(iter, TTVNEWS_METHOD);
 
-  if (title_tuple) {
-    strncpy(title, title_tuple->value->cstring, 128);
-    text_layer_set_text(text_layer, title);
+  if (!method_tuple) {
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Missing method");
+    return;
+  }
+
+  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Method : %s", method_tuple->value->cstring);	
+	
+  if (strcmp(method_tuple->value->cstring, "ready") == 0)
+	  refetch_story = true; // first msg fails so re-fetch on the fail handler
+  else if (strcmp(method_tuple->value->cstring, "story") == 0) {
+	  Tuple *title_tuple = dict_find(iter, TTVNEWS_TITLE);
+		
+	  if (title_tuple) {
+		strncpy(title, title_tuple->value->cstring, 128);
+		text_layer_set_text(text_layer, title);
+	  } else {
+		snprintf(title, 128, "Missing title");
+		text_layer_set_text(text_layer, title);	  
+	  }		
   }
 }
 
 static void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
-  snprintf(title, 128, "Fail [%d]", reason);
-  text_layer_set_text(text_layer, title);
+  if (refetch_story)
+    fetch_story(); // first call which triggers ready always fails
+  else
+  	APP_LOG(APP_LOG_LEVEL_DEBUG, "out_failed_handler %d", reason);
 }
 
 void handle_init(void) {
@@ -61,8 +78,10 @@ void handle_init(void) {
 
   app_message_register_inbox_received(in_received_handler);
   app_message_register_outbox_failed(out_failed_handler);
-  app_message_open(app_message_inbox_size_maximum(), 64);
-  fetch_msg();
+
+  app_message_open(64, 64);
+
+  fetch_story();
 }
 
 void handle_deinit(void) {
