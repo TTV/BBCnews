@@ -1,0 +1,18 @@
+{
+    "versionLabel": "1.0",
+    "uuid": "12885c70-1e59-45b3-9284-7847898268af",
+    "appKeys": {},
+    "longName": "BBCnews",
+    "versionCode": 1,
+    "capabilities": [
+        ""
+    ],
+    "shortName": "BBCnews",
+    "companyName": "ttv69",
+    "watchapp": {
+        "watchface": false
+    },
+    "resources": {
+        "media": []
+    }
+}
